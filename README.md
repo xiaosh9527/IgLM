@@ -44,6 +44,25 @@ To generate 100 unique nanobody sequences starting with QVQ:
 iglm_generate --prompt_sequence QVQ --chain_token [HEAVY] --species_token [CAMEL] --num_seqs 100 
 ```
 
+### Position-specific amino-acid probabilities
+IgLM can return a PSSM-like probability matrix by masking each residue in turn
+and predicting it from the rest of the antibody sequence. Rows follow sequence
+positions and columns follow the supplied amino-acid alphabet.
+
+```python
+from iglm import IgLM
+
+iglm = IgLM()
+probabilities = iglm.position_probabilities(
+    sequence="EVQLVESGGGLVQPGGSLRLSCAASGFTFSSYAMSWVRQAPGKGLEWVSA",
+    chain_token="[HEAVY]",
+    species_token="[HUMAN]",
+    alphabet="ACDEFGHIKLMNPQRSTVWY",
+    temperature=1.0,
+    batch_size=32,
+)
+```
+
 ### Sequence evaluation
 IgLM can be used to calculate the log likelihood of a sequence given a chain type and species-of-origin.
 

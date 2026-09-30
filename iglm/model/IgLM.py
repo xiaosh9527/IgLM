@@ -121,6 +121,62 @@ class IgLM():
 
         return generated_seqs
 
+    def position_probabilities(
+        self,
+        sequence,
+        chain_token,
+        species_token,
+        alphabet="ACDEFGHIKLMNPQRSTVWY",
+        temperature=1.0,
+        batch_size=32,
+    ):
+        """Return a context-conditioned amino-acid distribution per position.
+
+        Each residue is masked independently. IgLM sees both flanks of the
+        sequence and predicts the first token of the missing single-residue
+        span. The returned matrix has shape ``[len(sequence), len(alphabet)]``.
+        """
+        if temperature <= 0:
+            raise ValueError("temperature must be positive")
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+
+        sequence = list(sequence)
+        amino_acid_ids = self.tokenizer.convert_tokens_to_ids(list(alphabet))
+        assert self.tokenizer.unk_token_id not in amino_acid_ids, (
+            "Unrecognized amino acid supplied in alphabet"
+        )
+
+        contexts = []
+        for index in range(len(sequence)):
+            tokens = [chain_token, species_token] + mask_span(
+                sequence,
+                index,
+                index + 1,
+            )
+            token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+            assert self.tokenizer.unk_token_id not in token_ids, (
+                "Unrecognized token supplied while building position probabilities"
+            )
+            contexts.append(token_ids)
+
+        probabilities = []
+        with torch.no_grad():
+            for start in range(0, len(contexts), batch_size):
+                token_batch = torch.tensor(
+                    contexts[start:start + batch_size],
+                    dtype=torch.long,
+                    device=self.device,
+                )
+                logits = self.model(token_batch).logits[:, -1, amino_acid_ids]
+                batch_probabilities = torch.softmax(
+                    logits / temperature,
+                    dim=-1,
+                )
+                probabilities.extend(batch_probabilities.detach().cpu().tolist())
+
+        return probabilities
+
     def log_likelihood(
         self,
         sequence,
